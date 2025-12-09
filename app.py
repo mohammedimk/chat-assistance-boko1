@@ -9,6 +9,21 @@ except ImportError:
     st.warning("Groq module not installed, chat will be disabled.")
     Groq = None
 from dotenv import load_dotenv
+import streamlit as st
+import os
+
+port = int(os.environ.get("PORT", 8501))  # Default to 8501 locally
+
+if __name__ == "__main__":
+    # Run Streamlit programmatically
+    import subprocess
+    subprocess.run([
+        "streamlit", "run", "app.py",
+        "--server.port", str(port),
+        "--server.address", "0.0.0.0",
+        "--server.headless", "true"
+    ])
+
 
 # Load the .env file immediately
 load_dotenv()
