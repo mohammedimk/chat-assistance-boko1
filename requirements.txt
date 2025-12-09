@@ -1,5 +1,4 @@
 streamlit
 groq
 python-dotenv
-httpx
-python
+httpx>=0.25,<0.29
