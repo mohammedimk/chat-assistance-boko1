@@ -3,3 +3,5 @@ groq
 python-dotenv
 httpx
 requests
+pandas
+openpyxl

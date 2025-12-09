@@ -5,6 +5,12 @@ from typing import List, Optional
 import os
 import io
 import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import openpyxl
+
+
 
 # Optional Groq client (for richer feedback). If not installed or API key missing, fallback to local feedback.
 try:
@@ -53,6 +59,59 @@ class LessonPlanner:
         ]
 
 PLANNER_AVAILABLE = True
+
+from email.mime.base import MIMEBase
+from email import encoders
+import tempfile
+
+def send_grade_report_email(receiver_email: str, df):
+    try:
+        # Email configuration (from environment or Streamlit secrets)
+        SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+        if not SENDER_EMAIL or not EMAIL_PASSWORD:
+            st.error("Email credentials not configured in environment variables.")
+            return
+
+        # Create Excel file in memory
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            excel_path = tmp.name
+            df.to_excel(excel_path, index=False)
+
+        # Build email
+        msg = MIMEMultipart()
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = receiver_email
+        msg["Subject"] = "Student Grade Report (Excel)"
+
+        body = "Please find attached the student grade report."
+        msg.attach(MIMEText(body, "plain"))
+
+        # Attach file
+        with open(excel_path, "rb") as f:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(f.read())
+
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            f'attachment; filename="grade_report.xlsx"'
+        )
+        msg.attach(part)
+
+        # Send email
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        st.success("✅ Grade report sent successfully as Excel!")
+
+    except Exception as e:
+        st.error(f"Failed to send email: {e}")
+
 
 def make_lesson(obj):
     if isinstance(obj, Lesson):
@@ -241,8 +300,25 @@ with left_col:
             csv = st.session_state['grade_report'].to_csv(index=False)
             st.download_button("Download CSV", data=csv, file_name="grade_report.csv", mime="text/csv")
 
+
+
     # Feedback generation
     st.markdown("### Generate Feedback for Students")
+
+    st.markdown("### 📧 Email Grade Report")
+
+    teacher_email = st.text_input("Teacher's Email Address")
+
+    if st.button("Send Excel Report via Email"):
+        if st.session_state.get("grade_report") is None:
+            st.warning("Please compute grades before sending the email.")
+        elif not teacher_email:
+            st.warning("Please enter the teacher's email.")
+        else:
+            send_grade_report_email(teacher_email, st.session_state["grade_report"])
+
+
+
     fb_col1, fb_col2 = st.columns([2,1])
     with fb_col1:
         fb_scope = st.selectbox("Feedback mode", ["All students", "Single student"], index=0)
@@ -394,6 +470,25 @@ with right_col:
         colC.metric("Highest", f"{highest:.1f}%")
         colD.metric("Lowest", f"{lowest:.1f}%")
 
+                # -------------------------
+        # Send Report to Teacher Email
+        # -------------------------
+        st.markdown("### 📧 Send Report to Teacher")
+
+        teacher_email = st.text_input("Enter teacher's email address")
+
+        if st.button("Send Report to Email"):
+            if not teacher_email:
+                st.warning("Please enter an email.")
+            elif st.session_state.get("grade_report") is None:
+                st.warning("Generate the report first.")
+            else:
+                send_grade_report_email(teacher_email, st.session_state["grade_report"])
+
+
+
+        
+
         st.markdown("#### Score Distribution")
         # bar chart (student vs percent)
         chart_df = df[['student_name','percent']].set_index('student_name')
@@ -419,5 +514,5 @@ with right_col:
 # Footer / Help
 # -------------------------
 st.markdown("---")
-st.caption("Lesson Agent + Exam Manager — built for hackathon: lesson planning, scheduling, grading, analytics, and feedback generation.")
+st.caption("Lesson Agent + Exam Manager — lesson planning, scheduling, grading, analytics, and feedback generation.")
 
